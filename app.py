@@ -68,8 +68,16 @@ CREATE TABLE IF NOT EXISTS users(
 id INTEGER PRIMARY KEY AUTOINCREMENT,
 username TEXT UNIQUE,
 password TEXT,
-phone TEXT)
+phone TEXT,
+email TEXT)
 """)
+
+# Add email column if it doesn't exist (for existing databases)
+try:
+    c.execute("ALTER TABLE users ADD COLUMN email TEXT")
+    conn.commit()
+except:
+    pass
 
 c.execute("""
 CREATE TABLE IF NOT EXISTS videos(
@@ -176,15 +184,22 @@ if not st.session_state.user:
         ru = st.text_input("New Username")
         rp = st.text_input("New Password", type="password")
         rph = st.text_input("Phone")
+        rem = st.text_input("Email")
+
         if st.button("Register"):
-            try:
-                c.execute(
-                    "INSERT INTO users(username,password,phone) VALUES(?,?,?)",
-                    (ru, rp, rph))
-                conn.commit()
-                st.success("Registered")
-            except:
-                st.error("User exists")
+            if not ru or not rp or not rph or not rem:
+                st.error("All fields are required.")
+            elif "@" not in rem or "." not in rem:
+                st.error("Please enter a valid email address.")
+            else:
+                try:
+                    c.execute(
+                        "INSERT INTO users(username, password, phone, email) VALUES(?,?,?,?)",
+                        (ru, rp, rph, rem))
+                    conn.commit()
+                    st.success("Registered successfully! Please login.")
+                except:
+                    st.error("Username already exists.")
 
     st.stop()
 
@@ -252,7 +267,7 @@ with tabs[1]:
             plot_correlation(samples)
 
             wid = extract_watermark(samples)
-            c.execute("SELECT username,phone FROM users WHERE id=?", (wid,))
+            c.execute("SELECT username, phone FROM users WHERE id=?", (wid,))
             u = c.fetchone()
 
             if u:
@@ -290,7 +305,6 @@ with tabs[2]:
                 with col3:
                     video_path = row['path']
                     if os.path.exists(video_path):
-                        # Preview toggle using expander
                         with st.expander("▶ Preview"):
                             st.video(video_path)
                     else:
@@ -320,9 +334,12 @@ with tabs[3]:
     st.header("👥 Registered Users")
 
     users = pd.read_sql_query(
-        "SELECT id, username, phone FROM users", conn)
+        "SELECT id, username, phone, email FROM users", conn)
 
-    st.dataframe(users)
+    # Rename columns for display
+    users.columns = ["ID", "Username", "Phone", "Email"]
+
+    st.dataframe(users, use_container_width=True)
 
 
 # ---------------- LOGOUT ----------------
