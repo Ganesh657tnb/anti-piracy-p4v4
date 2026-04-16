@@ -313,15 +313,35 @@ with tabs[2]:
                 with col4:
                     video_path = row['path']
                     if os.path.exists(video_path):
-                        with open(video_path, "rb") as f:
-                            video_bytes = f.read()
-                        st.download_button(
-                            label="⬇️ Download",
-                            data=video_bytes,
-                            file_name=row['filename'],
-                            mime="video/mp4",
-                            key=f"dl_{row['id']}"
-                        )
+                        # Step 1: Button triggers watermarking with DOWNLOADER's uid
+                        if st.button("⬇️ Download", key=f"dl_btn_{row['id']}"):
+                            with st.spinner("Personalizing your copy..."):
+                                with tempfile.TemporaryDirectory() as tmp:
+                                    # Extract raw audio from stored video
+                                    wav_raw = os.path.join(tmp, "raw.wav")
+                                    extract_audio(video_path, wav_raw)
+
+                                    # Embed DOWNLOADER's user ID (uid)
+                                    sr, samples = wavfile.read(wav_raw)
+                                    wm_samples = embed_watermark(samples, uid)
+
+                                    wm_wav = os.path.join(tmp, "wm.wav")
+                                    wavfile.write(wm_wav, sr, wm_samples)
+
+                                    out_path = os.path.join(tmp, f"dl_{row['filename']}")
+                                    merge_audio(video_path, wm_wav, out_path)
+
+                                    with open(out_path, "rb") as f:
+                                        video_bytes = f.read()
+
+                            # Step 2: Serve the personalized file
+                            st.download_button(
+                                label="⬇️ Click to Save",
+                                data=video_bytes,
+                                file_name=row['filename'],
+                                mime="video/mp4",
+                                key=f"dl_save_{row['id']}"
+                            )
                     else:
                         st.caption("File not found on disk")
 
