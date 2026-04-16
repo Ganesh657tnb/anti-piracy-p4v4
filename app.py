@@ -187,7 +187,8 @@ with tabs[0]:
 
     if vid and st.button("Store Video"):
         path = os.path.join(VIDEO_DIR, vid.name)
-        open(path, "wb").write(vid.read())
+        with open(path, "wb") as f:
+            f.write(vid.read())
 
         c.execute(
             "INSERT INTO videos(filename,path,uploaded_by) VALUES(?,?,?)",
@@ -208,9 +209,10 @@ with tabs[1]:
             vid = os.path.join(tmp, v.name)
             wav = os.path.join(tmp, "d.wav")
 
-            open(vid, "wb").write(v.read())
-            extract_audio(vid, wav)
+            with open(vid, "wb") as f:
+                f.write(v.read())
 
+            extract_audio(vid, wav)
             sr, samples = wavfile.read(wav)
 
             plot_correlation(samples)
@@ -231,22 +233,25 @@ with tabs[2]:
 
     rows = pd.read_sql_query(
         """SELECT videos.id, videos.filename, videos.path, users.username
-        FROM videos JOIN users ON users.id = videos.uploaded_by""",
+           FROM videos JOIN users ON users.id = videos.uploaded_by""",
         conn
     )
 
     for _, row in rows.iterrows():
 
-        col1, col2, col3, col4 = st.columns([3,2,1,1])
+        col1, col2, col3, col4 = st.columns([3,2,2,1])
 
         with col1:
-            st.write(row["filename"])
+            st.write(f"🎬 {row['filename']}")
 
         with col2:
-            st.write(row["username"])
+            st.write(f"👤 {row['username']}")
 
         with col3:
-            st.video(row["path"])
+            if os.path.exists(row["path"]):
+                st.video(row["path"])
+            else:
+                st.warning("Missing file")
 
         with col4:
             if st.button("Prepare", key=f"prep_{row['id']}"):
@@ -264,12 +269,19 @@ with tabs[2]:
 
                     merge_audio(row["path"], wm_wav, out)
 
-                    st.session_state["file"] = out
-                    st.session_state["name"] = row["filename"]
+                    # ✅ STORE BYTES (FIX)
+                    with open(out, "rb") as f:
+                        st.session_state["video_bytes"] = f.read()
 
-    if "file" in st.session_state:
-        with open(st.session_state["file"], "rb") as f:
-            st.download_button("⬇️ Download", f, file_name=st.session_state["name"])
+                    st.session_state["video_name"] = row["filename"]
+
+    if "video_bytes" in st.session_state:
+        st.download_button(
+            "⬇️ Download",
+            data=st.session_state["video_bytes"],
+            file_name=st.session_state["video_name"],
+            mime="video/mp4"
+        )
 
 # ---------------- USERS ----------------
 with tabs[3]:
